@@ -1,0 +1,82 @@
+# BezosBallMemeGeneration
+
+Automatically generates and texts a daily AI-generated meme to a friend on weekdays at 9:15pm EDT.
+
+## How it works
+
+1. GitHub Actions runs Monday–Friday at 9:00pm EDT
+2. GPT-4o generates a random scene/style description (medieval, anime, space, etc.)
+3. DALL-E 3 renders the meme with the dialogue baked in
+4. The image is committed to the repo as `meme.jpg`
+5. An iOS Shortcut runs at 9:15pm, fetches the image, and texts it to your friend
+
+## Meme format
+
+Every meme has the same dialogue in a different visual style and setting:
+- Aggressor: **"GET OUT OF THE BALLS EVAN"**
+- Victim: **"MY PRODUCTIVITY"**
+
+## Repository structure
+
+```
+.github/
+  workflows/
+    daily_meme.yml       — runs Mon-Fri at 9pm EDT, generates and commits meme.jpg
+    manage_schedule.yml  — manually enable/disable sending by date range
+generate_meme.py         — calls GPT-4o + DALL-E 3, writes meme.jpg and send_today.json
+update_config.py         — updates config.json for enable/disable actions
+config.json              — stores disabled date ranges
+send_today.json          — tells the iOS Shortcut whether to send today (true/false)
+meme.jpg                 — the latest generated meme (overwritten daily)
+```
+
+## Setup
+
+### 1. Secrets
+Add your OpenAI API key as a repository secret:
+- Repo → Settings → Secrets and variables → Actions → New repository secret
+- Name: `OPENAI_API_KEY`
+
+### 2. Test the workflow
+- Actions tab → Daily Meme Generator → Run workflow → main
+
+### 3. iOS Shortcut
+Create a Shortcut with these actions:
+
+| Step | Action | Value |
+|------|--------|-------|
+| 1 | Get Contents of URL | `https://raw.githubusercontent.com/walton15/BezosBallMemeGeneration/main/send_today.json` |
+| 2 | Get Dictionary from Input | (result of step 1) |
+| 3 | Get Dictionary Value | key: `send` |
+| 4 | If value is `0` | Stop and Output (empty) |
+| 5 | Otherwise | (end if block) |
+| 6 | Get Contents of URL | `https://raw.githubusercontent.com/walton15/BezosBallMemeGeneration/main/meme.jpg` |
+| 7 | Send Message | Message: result of step 6, Recipient: your friend |
+
+Then create a Personal Automation: Time of Day → 9:15pm → Mon–Fri → run the shortcut → disable "Ask Before Running".
+
+## Disabling for a date range
+
+Go to **Actions → Manage Schedule → Run workflow**, then:
+- Action: `disable`
+- Start date: `YYYY-MM-DD`
+- End date: `YYYY-MM-DD`
+
+To re-enable early, run it again with action: `enable`.
+
+The workflow updates `config.json`. The next time the daily workflow runs, it will write `send: false` to `send_today.json` and the Shortcut will skip sending.
+
+**Note:** Disable before 9pm EDT on the day you want to skip. If the daily workflow has already run, it's too late to stop that day's send.
+
+## Timezone note
+
+The workflow cron is set for EDT (UTC-4). When clocks fall back in November (EST, UTC-5), update `daily_meme.yml`:
+
+```
+# EDT (summer):  cron: '0 1 * * 2-6'
+# EST (winter):  cron: '0 2 * * 2-6'
+```
+
+## Cost
+
+~$0.04/image × ~20 weekdays/month = **~$0.80/month** (OpenAI DALL-E 3 standard quality)
