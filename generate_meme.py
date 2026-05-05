@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import urllib.request
@@ -46,7 +47,39 @@ def generate_scene_prompt(client):
     return response.choices[0].message.content
 
 
-def draw_speech_bubbles(img):
+def detect_aggressor_side(client, image_path):
+    with open(image_path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_data}"},
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        "In this image, one character is attacking or overpowering another. "
+                        "Is the aggressor (the one doing the attacking) on the LEFT or RIGHT side "
+                        "of the image? Reply with only one word: 'left' or 'right'."
+                    ),
+                },
+            ],
+        }],
+        max_tokens=10,
+    )
+
+    answer = response.choices[0].message.content.strip().lower()
+    side = "left" if "left" in answer else "right"
+    print(f"Aggressor detected on: {side}")
+    return side
+
+
+def draw_speech_bubbles(img, aggressor_side):
     draw = ImageDraw.Draw(img)
     w, h = img.size
 
@@ -55,10 +88,16 @@ def draw_speech_bubbles(img):
     except TypeError:
         font = ImageFont.load_default()
 
-    bubbles = [
-        ("GET OUT OF THE\nBALLS EVAN", w // 4),
-        ("MY\nPRODUCTIVITY", 3 * w // 4),
-    ]
+    if aggressor_side == "left":
+        bubbles = [
+            ("GET OUT OF THE\nBALLS EVAN", w // 4),
+            ("MY\nPRODUCTIVITY", 3 * w // 4),
+        ]
+    else:
+        bubbles = [
+            ("MY\nPRODUCTIVITY", w // 4),
+            ("GET OUT OF THE\nBALLS EVAN", 3 * w // 4),
+        ]
 
     padding = 22
     cy = h // 6
@@ -116,8 +155,11 @@ def main():
     image_url = response.data[0].url
     urllib.request.urlretrieve(image_url, "/tmp/meme_raw.png")
 
+    print("Detecting aggressor position...")
+    aggressor_side = detect_aggressor_side(client, "/tmp/meme_raw.png")
+
     img = Image.open("/tmp/meme_raw.png").convert("RGB")
-    draw_speech_bubbles(img)
+    draw_speech_bubbles(img, aggressor_side)
     img.save("meme.jpg", "JPEG", quality=85)
     print("Saved meme.jpg")
 
