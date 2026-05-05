@@ -28,7 +28,7 @@ def generate_scene_prompt(client):
             "content": (
                 "You generate prompts for DALL-E 3 to create a funny meme image.\n\n"
                 "The meme always has the same setup: two characters, one physically "
-                "dominating/overpowering the other.\n"
+                "dominating/overpowering the other. The overpowered character needs to look very scared, overwhelmed, or tired. They should be inside of a ball or near a ball of any kind.\n"
                 "- The dominant character has a speech bubble pointing directly at them "
                 "that says EXACTLY: \"GET OUT OF THE BALLS EVAN\"\n"
                 "- The overwhelmed character has a speech bubble pointing directly at them "
