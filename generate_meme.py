@@ -29,10 +29,10 @@ def generate_scene_prompt(client):
             "content": (
                 "You generate prompts for DALL-E 3 to create a funny meme image.\n\n"
                 "The meme always has the same setup: two characters, one physically "
-                "overpowering/attacking/beating up the other. NO speech bubbles or text "
+                "overpowering/dominating the other. No text, labels, or speech bubbles "
                 "of any kind should appear in the image.\n"
-                "- The AGGRESSOR (attacking) must be positioned on the LEFT side of the image\n"
-                "- The VICTIM (being attacked) must be positioned on the RIGHT side of the image\n"
+                "- The DOMINANT character must be positioned on the LEFT side of the image\n"
+                "- The OVERWHELMED character must be positioned on the RIGHT side of the image\n"
                 "Both characters must be clearly visible and not obscured.\n\n"
                 "Each time, invent a completely new random combination of:\n"
                 "- Art style (e.g. renaissance oil painting, 1990s anime, pixel art, watercolor, "
@@ -63,9 +63,9 @@ def detect_aggressor_side(client, image_path):
                 {
                     "type": "text",
                     "text": (
-                        "In this image, one character is attacking or overpowering another. "
-                        "Is the aggressor (the one doing the attacking) on the LEFT or RIGHT side "
-                        "of the image? Reply with only one word: 'left' or 'right'."
+                        "In this image, one character is dominating or overpowering another. "
+                        "Is the dominant character on the LEFT or RIGHT side of the image? "
+                        "Reply with only one word: 'left' or 'right'."
                     ),
                 },
             ],
