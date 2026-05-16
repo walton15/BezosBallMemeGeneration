@@ -1,7 +1,6 @@
 import base64
 import json
 import os
-import urllib.request
 from datetime import date
 
 from openai import OpenAI
@@ -82,15 +81,16 @@ def main():
 
     print("Generating image...")
     response = client.images.generate(
-        model="dall-e-3",
+        model="gpt-image-2",
         prompt=prompt,
         size="1024x1024",
-        quality="standard",
+        quality="medium",
         n=1,
     )
 
-    image_url = response.data[0].url
-    urllib.request.urlretrieve(image_url, "/tmp/meme_raw.png")
+    image_data = base64.b64decode(response.data[0].b64_json)
+    with open("/tmp/meme_raw.png", "wb") as f:
+        f.write(image_data)
 
     img = Image.open("/tmp/meme_raw.png").convert("RGB")
     img.save("meme.jpg", "JPEG", quality=85)
