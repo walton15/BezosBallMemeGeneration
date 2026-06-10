@@ -1,10 +1,23 @@
 import base64
 import json
 import os
+import random
 from datetime import date
 
 from openai import OpenAI
 from PIL import Image
+
+
+def load_art_styles(path="art_styles.txt"):
+    with open(path) as f:
+        styles = []
+        for line in f:
+            line = line.strip()
+            if line:
+                # Strip leading "NNN. " numbering
+                parts = line.split(". ", 1)
+                styles.append(parts[1] if len(parts) == 2 else parts[0])
+    return styles
 
 
 def is_disabled_today(config):
@@ -20,7 +33,7 @@ def write_status(send: bool):
         json.dump({"send": send, "date": date.today().isoformat()}, f)
 
 
-def generate_scene_prompt(client):
+def generate_scene_prompt(client, art_style):
     with open("reference.png", "rb") as f:
         ref_image = base64.b64encode(f.read()).decode("utf-8")
 
@@ -49,12 +62,11 @@ def generate_scene_prompt(client):
                         "enough to read easily, and each bubble's tail must point unambiguously to "
                         "its speaker. Place the characters on opposite sides of the image so the "
                         "bubbles do not overlap.\n\n"
-                        "Each time, invent a completely new random combination of:\n"
-                        "- Art style (e.g. renaissance oil painting, 1990s anime, pixel art, watercolor, "
-                        "noir comic, children's book illustration, Soviet propaganda poster, etc.)\n"
+                        f"The art style MUST be: {art_style}\n\n"
+                        "Invent a completely new random combination of:\n"
                         "- Setting (e.g. underwater tea party, medieval jousting tournament, Wall Street "
                         "trading floor, outer space, ancient Roman colosseum, a Costco, etc.)\n"
-                        "- Character types that fit the setting\n\n"
+                        "- Character types that fit the setting and art style\n\n"
                         "Write only the DALL-E image prompt, nothing else. Be specific and vivid."
                     ),
                 },
@@ -75,8 +87,12 @@ def main():
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
+    art_styles = load_art_styles()
+    art_style = random.choice(art_styles)
+    print(f"Art style: {art_style}")
+
     print("Generating scene prompt...")
-    prompt = generate_scene_prompt(client)
+    prompt = generate_scene_prompt(client, art_style)
     print(f"Prompt: {prompt}\n")
 
     print("Generating image...")
