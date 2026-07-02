@@ -25,7 +25,10 @@ Every meme has the same dialogue in a different visual style and setting:
     manage_schedule.yml  — manually enable/disable sending by date range
 generate_meme.py         — calls GPT-4o + DALL-E 3, writes meme.jpg and send_today.json
 update_config.py         — updates config.json for enable/disable actions
-config.json              — stores disabled date ranges
+config.json              — stores disabled date ranges + evan_substitution_chance
+art_styles.txt           — 1000 art styles; one is picked at random per meme
+scenes.txt               — 1000 scene setups; one is picked at random per meme
+evan_images/             — real photos of Evan; occasionally composited in (see below)
 send_today.json          — tells the iOS Shortcut whether to send today (true/false)
 meme.jpg                 — the latest generated meme (overwritten daily)
 ```
@@ -54,6 +57,18 @@ Create a Shortcut with these actions:
 | 7 | Send Message | Message: result of step 6, Recipient: your friend |
 
 Then create a Personal Automation: Time of Day → 9:15pm → Mon–Fri → run the shortcut → disable "Ask Before Running".
+
+## Real-person substitution
+
+On each run there's a configurable chance to swap the generated "inside the
+ball" victim for a real photo of Evan:
+
+1. Put photos (`.png`/`.jpg`/`.jpeg`/`.webp`) in `evan_images/`.
+2. Set the odds in `config.json` via `evan_substitution_chance` (default `0.05` = 5%).
+
+When it triggers, a random photo is picked and composited into the scene via the
+OpenAI image **edit** endpoint (preserving the real face). If the roll fails, or
+`evan_images/` is empty/missing, a normal fully-generated meme is produced.
 
 ## Disabling for a date range
 

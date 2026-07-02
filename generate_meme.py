@@ -8,16 +8,26 @@ from openai import OpenAI
 from PIL import Image
 
 
-def load_art_styles(path="art_styles.txt"):
+def load_numbered_list(path):
     with open(path) as f:
-        styles = []
+        items = []
         for line in f:
             line = line.strip()
             if line:
                 # Strip leading "NNN. " numbering
                 parts = line.split(". ", 1)
-                styles.append(parts[1] if len(parts) == 2 else parts[0])
-    return styles
+                items.append(parts[1] if len(parts) == 2 else parts[0])
+    return items
+
+
+def pick_evan_image(directory="evan_images"):
+    if not os.path.isdir(directory):
+        return None
+    exts = (".png", ".jpg", ".jpeg", ".webp")
+    images = [f for f in os.listdir(directory) if f.lower().endswith(exts)]
+    if not images:
+        return None
+    return os.path.join(directory, random.choice(images))
 
 
 def is_disabled_today(config):
@@ -33,9 +43,28 @@ def write_status(send: bool):
         json.dump({"send": send, "date": date.today().isoformat()}, f)
 
 
-def generate_scene_prompt(client, art_style):
+def generate_scene_prompt(client, art_style, scene, use_real_person=False):
     with open("reference.png", "rb") as f:
         ref_image = base64.b64encode(f.read()).decode("utf-8")
+
+    if use_real_person:
+        overwhelmed_instruction = (
+            f"The scene MUST depict: {scene}\n"
+            "Map that scene onto the meme setup: the dominant/overpowering character is the "
+            "one on the left. The scared/overwhelmed character on the right (inside or near a "
+            "ball) MUST be the REAL PERSON from the separate photograph that will be provided "
+            "with this prompt — preserve their real face and likeness exactly, do not turn them "
+            "into a cartoon or stylize their face. Blend them naturally into the surrounding "
+            "scene, which uses the art style above. Describe them as terrified/overwhelmed, "
+            "trapped inside the ball. Add vivid, specific setting details that fit the scene.\n\n"
+        )
+    else:
+        overwhelmed_instruction = (
+            f"The scene MUST depict: {scene}\n"
+            "Map that scene onto the meme setup: the dominant/overpowering character is the "
+            "one on the left, and the scared/overwhelmed character (inside or near a ball) is "
+            "on the right. Add vivid, specific setting details that fit the scene and art style.\n\n"
+        )
 
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -63,10 +92,7 @@ def generate_scene_prompt(client, art_style):
                         "its speaker. Place the characters on opposite sides of the image so the "
                         "bubbles do not overlap.\n\n"
                         f"The art style MUST be: {art_style}\n\n"
-                        "Invent a completely new random combination of:\n"
-                        "- Setting (e.g. underwater tea party, medieval jousting tournament, Wall Street "
-                        "trading floor, outer space, ancient Roman colosseum, a Costco, etc.)\n"
-                        "- Character types that fit the setting and art style\n\n"
+                        + overwhelmed_instruction +
                         "Write only the DALL-E image prompt, nothing else. Be specific and vivid."
                     ),
                 },
@@ -87,22 +113,45 @@ def main():
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    art_styles = load_art_styles()
+    art_styles = load_numbered_list("art_styles.txt")
     art_style = random.choice(art_styles)
     print(f"Art style: {art_style}")
 
+    scenes = load_numbered_list("scenes.txt")
+    scene = random.choice(scenes)
+    print(f"Scene: {scene}")
+
+    # Small configurable chance to composite a real photo of Evan as the
+    # overwhelmed "inside the ball" character instead of a generated one.
+    sub_chance = config.get("evan_substitution_chance", 0.05)
+    evan_image_path = pick_evan_image() if random.random() < sub_chance else None
+    use_real_person = evan_image_path is not None
+    if use_real_person:
+        print(f"Substituting real person: {evan_image_path}")
+
     print("Generating scene prompt...")
-    prompt = generate_scene_prompt(client, art_style)
+    prompt = generate_scene_prompt(client, art_style, scene, use_real_person=use_real_person)
     print(f"Prompt: {prompt}\n")
 
     print("Generating image...")
-    response = client.images.generate(
-        model="gpt-image-2",
-        prompt=prompt,
-        size="1024x1024",
-        quality="medium",
-        n=1,
-    )
+    if use_real_person:
+        with open(evan_image_path, "rb") as evan_f:
+            response = client.images.edit(
+                model="gpt-image-2",
+                image=evan_f,
+                prompt=prompt,
+                size="1024x1024",
+                quality="medium",
+                n=1,
+            )
+    else:
+        response = client.images.generate(
+            model="gpt-image-2",
+            prompt=prompt,
+            size="1024x1024",
+            quality="medium",
+            n=1,
+        )
 
     image_data = base64.b64decode(response.data[0].b64_json)
     with open("/tmp/meme_raw.png", "wb") as f:
