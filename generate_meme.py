@@ -5,7 +5,7 @@ import random
 from datetime import date
 
 from openai import OpenAI
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 def load_numbered_list(path):
@@ -28,6 +28,38 @@ def pick_evan_image(directory="evan_images"):
     if not images:
         return None
     return os.path.join(directory, random.choice(images))
+
+
+def prepare_image_for_edit(path, out_path="/tmp/evan_input.png", max_dim=1024):
+    """Normalize a raw phone photo into a clean file the images.edit API accepts.
+
+    Applies EXIF orientation, flattens to RGB, downscales, and re-encodes as a
+    plain PNG. Raw iPhone JPEGs (large, EXIF-laden) are frequently rejected by
+    the edit endpoint with 'invalid_image_file'.
+    """
+    img = Image.open(path)
+    img = ImageOps.exif_transpose(img)
+    img = img.convert("RGB")
+    img.thumbnail((max_dim, max_dim))
+    img.save(out_path, "PNG")
+    return out_path
+
+
+def is_refusal(text):
+    """Detect when the prompt-generation model returned a refusal instead of a prompt."""
+    if not text:
+        return True
+    lowered = text.strip().lower()
+    refusal_markers = (
+        "i'm sorry",
+        "i am sorry",
+        "i can't assist",
+        "i cannot assist",
+        "i can't help",
+        "i cannot help",
+        "unable to assist",
+    )
+    return any(lowered.startswith(m) for m in refusal_markers)
 
 
 def is_disabled_today(config):
@@ -53,8 +85,8 @@ def generate_scene_prompt(client, art_style, scene, use_real_person=False):
             "Map that scene onto the meme setup: the dominant/overpowering character is the "
             "one on the left. The scared/overwhelmed character on the right (inside or near a "
             "ball) MUST be the REAL PERSON from the separate photograph that will be provided "
-            "with this prompt — preserve their real face and likeness exactly, do not turn them "
-            "into a cartoon or stylize their face. Blend them naturally into the surrounding "
+            "with this prompt — keep their face natural and photographic rather than turning "
+            "them into a cartoon or heavily stylizing it. Blend them naturally into the surrounding "
             "scene, which uses the art style above. Describe them as terrified/overwhelmed, "
             "trapped inside the ball. Add vivid, specific setting details that fit the scene.\n\n"
         )
@@ -131,11 +163,20 @@ def main():
 
     print("Generating scene prompt...")
     prompt = generate_scene_prompt(client, art_style, scene, use_real_person=use_real_person)
+
+    # If the prompt model refused, don't feed the refusal string to the image
+    # model — fall back to the fully generated (non-real-person) path.
+    if use_real_person and is_refusal(prompt):
+        print("Scene prompt was refused; falling back to generated character.")
+        use_real_person = False
+        prompt = generate_scene_prompt(client, art_style, scene, use_real_person=False)
+
     print(f"Prompt: {prompt}\n")
 
     print("Generating image...")
     if use_real_person:
-        with open(evan_image_path, "rb") as evan_f:
+        prepared_path = prepare_image_for_edit(evan_image_path)
+        with open(prepared_path, "rb") as evan_f:
             response = client.images.edit(
                 model="gpt-image-2",
                 image=evan_f,
