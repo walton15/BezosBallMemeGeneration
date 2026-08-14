@@ -2,9 +2,10 @@ name: Daily Meme Generator
 
 on:
   schedule:
-    # 9:00pm EDT (UTC-4) Mon-Fri = 1:00am UTC Tue-Sat
-    # In winter (EST, UTC-5) this will run at 8:00pm — update to "0 2 * * 2-6" then
-    - cron: '0 1 * * 2-6'
+    # 5:30pm EDT (UTC-4) Mon-Fri = 9:30pm UTC. Runs before the Email Meme window
+    # (6:15pm–9:00pm) so today's meme is ready to send.
+    # In winter (EST, UTC-5) this will run at 4:30pm — update to "30 22 * * 1-5" then
+    - cron: '30 21 * * 1-5'
   workflow_dispatch:
 
 permissions:

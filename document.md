@@ -1,15 +1,15 @@
 # BezosBallMemeGeneration
 
-Automatically generates and texts a daily AI-generated meme to a friend on weekdays at 9:15pm EDT.
+Automatically generates and emails a daily AI-generated meme to a friend on weekdays, at a random time between 6:15pm and 9:00pm EDT.
 
 ## How it works
 
-1. GitHub Actions runs Monday–Friday at 9:00pm EDT
+1. GitHub Actions runs Monday–Friday at 5:30pm EDT
 2. GPT-4o generates a random scene/style description (medieval, anime, space, etc.)
 3. DALL-E 3 renders the meme with the dialogue baked in
 4. The image is committed to the repo as `meme.jpg`
-5. A second GitHub Actions workflow runs at 9:15pm EDT and emails `meme.jpg` (respecting `send_today.json`)
-6. (Optional) An iOS Shortcut can also run at 9:15pm, fetch the image, and text it to your friend
+5. A second GitHub Actions workflow fires at 6:15pm EDT, waits a random 0–165 min, then emails `meme.jpg` to Evan (respecting `send_today.json`) — so the send lands somewhere between 6:15pm and 9:00pm EDT
+6. (Optional) An iOS Shortcut can also fetch the image and text it to your friend
 
 ## Meme format
 
@@ -22,8 +22,8 @@ Every meme has the same dialogue in a different visual style and setting:
 ```
 .github/
   workflows/
-    daily_meme.yml       — runs Mon-Fri at 9pm EDT, generates and commits meme.jpg
-    email_meme.yml       — runs Mon-Fri at 9:15pm EDT, emails meme.jpg (gated on send_today.json)
+    daily_meme.yml       — runs Mon-Fri at 5:30pm EDT, generates and commits meme.jpg
+    email_meme.yml       — fires Mon-Fri at 6:15pm EDT, random 0–165 min delay, emails meme.jpg (gated on send_today.json)
     manage_schedule.yml  — manually enable/disable sending by date range
 generate_meme.py         — calls GPT-4o + DALL-E 3, writes meme.jpg and send_today.json
 update_config.py         — updates config.json for enable/disable actions
@@ -46,7 +46,7 @@ Add these repository secrets (Repo → Settings → Secrets and variables → Ac
 | `MAIL_USERNAME` | The Gmail address the meme is sent **from** |
 | `MAIL_PASSWORD` | A Gmail [App Password](https://myaccount.google.com/apppasswords) for that account (not your normal password; requires 2FA enabled) |
 
-The email is sent **to** `moseleywalton@gmail.com` (change the `to:` field in `email_meme.yml` to send elsewhere).
+The email is sent **to** `evanlazaro@gmail.com` (change the `to:` field in `email_meme.yml` to send elsewhere).
 
 ### 2. Test the workflow
 - Actions tab → Daily Meme Generator → Run workflow → main
@@ -96,8 +96,8 @@ The workflow updates `config.json`. The next time the daily workflow runs, it wi
 The workflow crons are set for EDT (UTC-4). When clocks fall back in November (EST, UTC-5), update both `daily_meme.yml` and `email_meme.yml`:
 
 ```
-# daily_meme.yml  — EDT (summer): '0 1 * * 2-6'   EST (winter): '0 2 * * 2-6'
-# email_meme.yml  — EDT (summer): '15 1 * * 2-6'  EST (winter): '15 2 * * 2-6'
+# daily_meme.yml  — EDT (summer): '30 21 * * 1-5'  EST (winter): '30 22 * * 1-5'
+# email_meme.yml  — EDT (summer): '15 22 * * 1-5'  EST (winter): '15 23 * * 1-5'
 ```
 
 ## Cost

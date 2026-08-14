@@ -2,15 +2,25 @@ name: Email Meme
 
 on:
   schedule:
-    # 9:15pm EDT (UTC-4) Mon-Fri = 1:15am UTC Tue-Sat
-    # In winter (EST, UTC-5) this will run at 8:15pm — update to "15 2 * * 2-6" then
-    - cron: '15 1 * * 2-6'
+    # Fire at 6:15pm EDT (UTC-4) Mon-Fri = 10:15pm UTC. This is the EARLIEST
+    # send time; the job then sleeps a random 0–165 min so the actual send lands
+    # somewhere between 6:15pm and 9:00pm EDT (i.e. 15 min to 3 hours after 6pm).
+    # In winter (EST, UTC-5) update the hour to 23 -> "15 23 * * 1-5".
+    - cron: '15 22 * * 1-5'
   workflow_dispatch:
 
 jobs:
   email:
     runs-on: ubuntu-latest
     steps:
+      - name: Random delay (0–165 min)
+        run: |
+          # Random offset so the send time is uniformly spread across the
+          # 6:15pm–9:00pm window (165 min = 9900 s) instead of a fixed time.
+          delay=$(( RANDOM % 9901 ))
+          echo "Sleeping ${delay}s (~$(( delay / 60 )) min) before sending"
+          sleep "$delay"
+
       - uses: actions/checkout@v4
 
       - name: Check send status
@@ -32,7 +42,7 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           from: Bezos Ball Meme Bot <${{ secrets.MAIL_USERNAME }}>
-          to: moseleywalton@gmail.com
+          to: evanlazaro@gmail.com
           subject: "GET OUT OF THE BALLS EVAN — daily meme"
           body: "Today's meme is attached."
           attachments: meme.jpg
