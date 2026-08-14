@@ -1,0 +1,38 @@
+name: Email Meme
+
+on:
+  schedule:
+    # 9:15pm EDT (UTC-4) Mon-Fri = 1:15am UTC Tue-Sat
+    # In winter (EST, UTC-5) this will run at 8:15pm — update to "15 2 * * 2-6" then
+    - cron: '15 1 * * 2-6'
+  workflow_dispatch:
+
+jobs:
+  email:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check send status
+        id: status
+        run: |
+          # send_today.json is written by the Daily Meme Generator workflow.
+          # Only email when today's meme is flagged for sending.
+          send=$(python -c "import json; print(json.load(open('send_today.json')).get('send', False))")
+          echo "send=$send" >> "$GITHUB_OUTPUT"
+          echo "Send today: $send"
+
+      - name: Send meme email
+        if: steps.status.outputs.send == 'True'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Bezos Ball Meme Bot <${{ secrets.MAIL_USERNAME }}>
+          to: moseleywalton@gmail.com
+          subject: "GET OUT OF THE BALLS EVAN — daily meme"
+          body: "Today's meme is attached."
+          attachments: meme.jpg

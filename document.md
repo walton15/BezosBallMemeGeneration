@@ -8,7 +8,8 @@ Automatically generates and texts a daily AI-generated meme to a friend on weekd
 2. GPT-4o generates a random scene/style description (medieval, anime, space, etc.)
 3. DALL-E 3 renders the meme with the dialogue baked in
 4. The image is committed to the repo as `meme.jpg`
-5. An iOS Shortcut runs at 9:15pm, fetches the image, and texts it to your friend
+5. A second GitHub Actions workflow runs at 9:15pm EDT and emails `meme.jpg` (respecting `send_today.json`)
+6. (Optional) An iOS Shortcut can also run at 9:15pm, fetch the image, and text it to your friend
 
 ## Meme format
 
@@ -22,6 +23,7 @@ Every meme has the same dialogue in a different visual style and setting:
 .github/
   workflows/
     daily_meme.yml       — runs Mon-Fri at 9pm EDT, generates and commits meme.jpg
+    email_meme.yml       — runs Mon-Fri at 9:15pm EDT, emails meme.jpg (gated on send_today.json)
     manage_schedule.yml  — manually enable/disable sending by date range
 generate_meme.py         — calls GPT-4o + DALL-E 3, writes meme.jpg and send_today.json
 update_config.py         — updates config.json for enable/disable actions
@@ -36,9 +38,15 @@ meme.jpg                 — the latest generated meme (overwritten daily)
 ## Setup
 
 ### 1. Secrets
-Add your OpenAI API key as a repository secret:
-- Repo → Settings → Secrets and variables → Actions → New repository secret
-- Name: `OPENAI_API_KEY`
+Add these repository secrets (Repo → Settings → Secrets and variables → Actions → New repository secret):
+
+| Name | Value |
+|------|-------|
+| `OPENAI_API_KEY` | Your OpenAI API key (used to generate the meme) |
+| `MAIL_USERNAME` | The Gmail address the meme is sent **from** |
+| `MAIL_PASSWORD` | A Gmail [App Password](https://myaccount.google.com/apppasswords) for that account (not your normal password; requires 2FA enabled) |
+
+The email is sent **to** `moseleywalton@gmail.com` (change the `to:` field in `email_meme.yml` to send elsewhere).
 
 ### 2. Test the workflow
 - Actions tab → Daily Meme Generator → Run workflow → main
@@ -85,11 +93,11 @@ The workflow updates `config.json`. The next time the daily workflow runs, it wi
 
 ## Timezone note
 
-The workflow cron is set for EDT (UTC-4). When clocks fall back in November (EST, UTC-5), update `daily_meme.yml`:
+The workflow crons are set for EDT (UTC-4). When clocks fall back in November (EST, UTC-5), update both `daily_meme.yml` and `email_meme.yml`:
 
 ```
-# EDT (summer):  cron: '0 1 * * 2-6'
-# EST (winter):  cron: '0 2 * * 2-6'
+# daily_meme.yml  — EDT (summer): '0 1 * * 2-6'   EST (winter): '0 2 * * 2-6'
+# email_meme.yml  — EDT (summer): '15 1 * * 2-6'  EST (winter): '15 2 * * 2-6'
 ```
 
 ## Cost
