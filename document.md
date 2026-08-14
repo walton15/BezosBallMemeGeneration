@@ -8,8 +8,11 @@ Automatically generates and emails a daily AI-generated meme to a friend on week
 2. GPT-4o generates a random scene/style description (medieval, anime, space, etc.)
 3. DALL-E 3 renders the meme with the dialogue baked in
 4. The image is committed to the repo as `meme.jpg`
-5. A second GitHub Actions workflow fires at 6:15pm EDT, waits a random 0–165 min, then emails `meme.jpg` to Evan (respecting `send_today.json`) — so the send lands somewhere between 6:15pm and 9:00pm EDT
-6. (Optional) An iOS Shortcut can also fetch the image and text it to your friend
+5. The same job picks a **random send time between 6:15pm and 9:00pm ET** and records it in `next_send.json`
+6. A second workflow (`email_meme.yml`) wakes up every 15 min during the window; once the chosen time has passed it emails `meme.jpg` to Evan (respecting `send_today.json`), marks it sent, and stops
+7. (Optional) An iOS Shortcut can also fetch the image and text it to your friend
+
+The random time is stored in `next_send.json`, so no runner sits idle waiting — the poller only runs ~15 seconds per check. Send time is quantized to the next 15-min tick.
 
 ## Meme format
 
@@ -22,16 +25,19 @@ Every meme has the same dialogue in a different visual style and setting:
 ```
 .github/
   workflows/
-    daily_meme.yml       — runs Mon-Fri at 5:30pm EDT, generates and commits meme.jpg
-    email_meme.yml       — fires Mon-Fri at 6:15pm EDT, random 0–165 min delay, emails meme.jpg (gated on send_today.json)
+    daily_meme.yml       — runs Mon-Fri at 5:30pm EDT: generates meme.jpg + picks the send time
+    email_meme.yml       — polls every 15 min in the window, emails meme.jpg once the time passes
     manage_schedule.yml  — manually enable/disable sending by date range
 generate_meme.py         — calls GPT-4o + DALL-E 3, writes meme.jpg and send_today.json
+schedule_email.py        — picks a random 6:15–9:00pm ET send time, writes next_send.json
+email_gate.py            — decides whether email_meme.yml should send on the current tick
 update_config.py         — updates config.json for enable/disable actions
 config.json              — stores disabled date ranges + evan_substitution_chance
 art_styles.txt           — 1000 art styles; one is picked at random per meme
 scenes.txt               — 1000 scene setups; one is picked at random per meme
 evan_images/             — real photos of Evan; occasionally composited in (see below)
-send_today.json          — tells the iOS Shortcut whether to send today (true/false)
+send_today.json          — whether sending is enabled today (true/false)
+next_send.json           — today's randomly-chosen send time + sent flag
 meme.jpg                 — the latest generated meme (overwritten daily)
 ```
 
@@ -89,16 +95,13 @@ To re-enable early, run it again with action: `enable`.
 
 The workflow updates `config.json`. The next time the daily workflow runs, it will write `send: false` to `send_today.json` and the Shortcut will skip sending.
 
-**Note:** Disable before 9pm EDT on the day you want to skip. If the daily workflow has already run, it's too late to stop that day's send.
+**Note:** Disable before 5:30pm EDT on the day you want to skip. If the daily workflow has already run and picked a send time, disabling still works — `email_gate.py` re-checks `send_today.json` on every tick, so `send: false` stops that day's email.
 
 ## Timezone note
 
-The workflow crons are set for EDT (UTC-4). When clocks fall back in November (EST, UTC-5), update both `daily_meme.yml` and `email_meme.yml`:
+The **send time** (6:15–9:00pm) is computed in `America/New_York` by `schedule_email.py` / `email_gate.py`, so it follows DST automatically — no seasonal edits needed. `email_meme.yml`'s poll cron already spans the UTC hours for both EDT and EST.
 
-```
-# daily_meme.yml  — EDT (summer): '30 21 * * 1-5'  EST (winter): '30 22 * * 1-5'
-# email_meme.yml  — EDT (summer): '15 22 * * 1-5'  EST (winter): '15 23 * * 1-5'
-```
+Only the **generation** trigger in `daily_meme.yml` is a fixed UTC cron (`30 21 * * 1-5` = 5:30pm EDT / 4:30pm EST). Either way it runs before the send window, so no seasonal edit is required there either.
 
 ## Cost
 

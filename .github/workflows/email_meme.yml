@@ -2,38 +2,37 @@ name: Email Meme
 
 on:
   schedule:
-    # Fire at 6:15pm EDT (UTC-4) Mon-Fri = 10:15pm UTC. This is the EARLIEST
-    # send time; the job then sleeps a random 0–165 min so the actual send lands
-    # somewhere between 6:15pm and 9:00pm EDT (i.e. 15 min to 3 hours after 6pm).
-    # In winter (EST, UTC-5) update the hour to 23 -> "15 23 * * 1-5".
-    - cron: '15 22 * * 1-5'
+    # Lightweight check every 15 min across the possible send window. The random
+    # target time (6:15pm–9:00pm ET) is chosen daily by daily_meme.yml and stored
+    # in next_send.json; email_gate.py decides when the target has passed.
+    # These UTC hours cover the window in both EDT (22:15–01:00) and EST (23:15–02:00).
+    - cron: '*/15 22,23 * * *'
+    - cron: '*/15 0,1,2 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   email:
     runs-on: ubuntu-latest
     steps:
-      - name: Random delay (0–165 min)
-        run: |
-          # Random offset so the send time is uniformly spread across the
-          # 6:15pm–9:00pm window (165 min = 9900 s) instead of a fixed time.
-          delay=$(( RANDOM % 9901 ))
-          echo "Sleeping ${delay}s (~$(( delay / 60 )) min) before sending"
-          sleep "$delay"
-
       - uses: actions/checkout@v4
 
-      - name: Check send status
-        id: status
-        run: |
-          # send_today.json is written by the Daily Meme Generator workflow.
-          # Only email when today's meme is flagged for sending.
-          send=$(python -c "import json; print(json.load(open('send_today.json')).get('send', False))")
-          echo "send=$send" >> "$GITHUB_OUTPUT"
-          echo "Send today: $send"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install tzdata
+
+      - name: Decide whether to send now
+        id: gate
+        run: echo "send=$(python email_gate.py)" >> "$GITHUB_OUTPUT"
 
       - name: Send meme email
-        if: steps.status.outputs.send == 'True'
+        id: send
+        if: steps.gate.outputs.send == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -46,3 +45,14 @@ jobs:
           subject: "GET OUT OF THE BALLS EVAN — daily meme"
           body: "Today's meme is attached."
           attachments: meme.jpg
+
+      - name: Mark as sent
+        if: steps.send.outcome == 'success'
+        run: |
+          python -c "import json; d=json.load(open('next_send.json')); d['sent']=True; json.dump(d, open('next_send.json','w'))"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add next_send.json
+          git commit -m "Mark meme sent $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase --autostash origin main || true
+          git push
