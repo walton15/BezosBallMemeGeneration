@@ -49,6 +49,11 @@ MARGIN_IN = 0.25
 BOTTOM_CLEAR_IN = 0.95
 ART_WIDTH_FRAC = 0.45
 
+# PostGrid composites the rendered page onto a canvas with this much bleed on
+# every side, then trims back to the trim size. Confirmed by measuring a
+# rendered preview: a 6x4 card comes back as a 6.25x4.25 PDF page.
+BLEED_IN = 0.125
+
 
 def load_json(path, default=None):
     try:
@@ -124,10 +129,22 @@ def render(template, **fields):
 FRONT_TEMPLATE = """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 @page { size: __W__in __H__in; margin: 0; }
-html, body { margin: 0; padding: 0; width: __W__in; height: __H__in; }
-img { width: __W__in; height: __H__in; object-fit: cover; display: block; }
+html, body { margin: 0; padding: 0; width: __W__in; height: __H__in;
+             overflow: hidden; background: #000000; }
+/* PostGrid renders this page onto a 0.125in bleed canvas and then trims back
+   to the trim size, so only the middle __VW__% x __VH__% of what we lay out
+   actually survives on the card. A plain full-bleed image therefore loses its
+   outer edge - which is where the speech bubbles tend to sit.
+   So: .bleed only fills the border that gets cut away, and .card holds the
+   whole meme inside the surviving area. object-fit:fill stretches .card to a
+   __VW__%/__VH__% box, and the page scaling that follows stretches it back by
+   exactly the inverse, so the printed image is undistorted. */
+.bleed { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+         object-fit: cover; display: block; }
+.card  { position: absolute; left: __LX__%; top: __TY__%;
+         width: __VW__%; height: __VH__%; object-fit: fill; display: block; }
 </style></head>
-<body><img src="__IMG__"></body></html>
+<body><img class="bleed" src="__IMG__"><img class="card" src="__IMG__"></body></html>
 """
 
 BACK_TEMPLATE = """<!DOCTYPE html>
@@ -153,7 +170,15 @@ def build_html(config, src):
             ", ".join(SIZES), size))
     width, height = SIZES[size]
 
-    front = render(FRONT_TEMPLATE, W=width, H=height, IMG=src)
+    # Fraction of the laid-out page that survives the bleed trim.
+    visible_w = width / (width + 2 * BLEED_IN)
+    visible_h = height / (height + 2 * BLEED_IN)
+    front = render(
+        FRONT_TEMPLATE, W=width, H=height, IMG=src,
+        VW=round(visible_w * 100, 4), VH=round(visible_h * 100, 4),
+        LX=round((1 - visible_w) / 2 * 100, 4),
+        TY=round((1 - visible_h) / 2 * 100, 4),
+    )
 
     mode = config.get("back_mode", "image")
     text = escape(config.get("back_text", "") or "")

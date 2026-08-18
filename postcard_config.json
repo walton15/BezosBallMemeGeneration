@@ -4,8 +4,8 @@
   "image_dir": "weekly_mail_meme",
   "image_source": "url",
   "image_base_url": "",
-  "back_mode": "image",
-  "back_text": "GET OUT OF THE BALLS EVAN. Another week, another meme. -- The Bezos Ball Meme Bot",
+  "back_mode": "blank",
+  "back_text": "",
   "description": "Weekly Bezos ball meme postcard",
   "to": {
     "firstName": "Recipient",
