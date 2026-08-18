@@ -36,6 +36,7 @@ email_gate.py            — decides whether email_meme.yml should send on the c
 update_config.py         — updates config.json for enable/disable actions
 send_weekly_postcard.py  — picks the next weekly image and mails it via PostGrid
 generate_weekly_memes.py — generates a year of postcard memes, holiday-aware
+fetch_postcard_preview.py — downloads a rendered postcard PDF to check the print
 config.json              — stores disabled date ranges + evan_substitution_chance
 art_styles.txt           — 1000 art styles; one is picked at random per meme
 scenes.txt               — 1000 scene setups; one is picked at random per meme
@@ -181,7 +182,7 @@ Everything mailing-related lives in `postcard_config.json`:
 | `image_dir` | Folder holding the queue (default `weekly_mail_meme`) |
 | `image_source` | `url` (default) or `base64` — see below |
 | `image_base_url` | Optional; overrides the auto-derived image URL |
-| `back_mode` | `image`, `text`, or `blank` |
+| `back_mode` | `blank` (default: addresses only), `image`, or `text` |
 | `back_text` | Caption printed on the back (used by `image` and `text`) |
 | `to` / `from` | Placeholder addresses only; real ones come from secrets (see below) |
 
@@ -222,11 +223,28 @@ public.
 If you ever make the repo private, set `image_source: "base64"` and the image is
 inlined as a data URI instead — no public URL needed.
 
-The front is a full-bleed image. On the back, art is confined to the left side
-with the right side and bottom strip left clear for the address block and USPS
-barcode. Printing the back costs nothing extra (the address is printed there
-regardless), so `back_mode: "image"` is the default; use `"blank"` if you'd
-rather have a clean back.
+### Bleed and trim
+
+PostGrid composites the rendered page onto a canvas with **0.125in of bleed on
+every side**, then trims back to the trim size. A 6x4 card comes back as a
+6.25x4.25 PDF page — measured from a real rendered preview, not assumed.
+
+A naive full-bleed image therefore loses its outer edge, which is exactly where
+speech bubbles tend to sit; the first test render clipped one. So the front lays
+the meme into only the area that survives the trim, with a cover copy behind it
+filling the border that gets cut away. `object-fit: fill` on the inner copy and
+the page scaling that follows cancel out, so the print is undistorted.
+
+This is why `BLEED_IN` exists in `send_weekly_postcard.py`. If PostGrid ever
+changes that margin, a preview will show it and only that constant needs editing.
+
+### The address side
+
+`back_mode` is `"blank"`: a plain white side carrying just the return address and
+the recipient, which is what PostGrid overlays itself. `"image"` puts art on the
+left (clear of the address block and the USPS barcode strip) and `"text"` prints
+`back_text` there. Printing the back costs nothing extra either way, since the
+address is printed there regardless.
 
 ### Setup
 
@@ -256,8 +274,29 @@ python send_weekly_postcard.py --dry-run
 POSTCARD_TO="$(cat ~/postcard_to.json)" \n  python send_weekly_postcard.py --dry-run --show-addresses
 ```
 
-Each send uses an `Idempotency-Key` derived from the filename, so a re-run of the
-same week will not mail a duplicate.
+Each send uses an `Idempotency-Key` derived from the **request content**, so an
+identical retry (a re-run of the same Monday) will not mail a duplicate, while a
+genuinely different card — new layout, new address — still goes through. Keying on
+the filename alone would silently return the previously rendered card.
+
+### Checking how a card actually prints
+
+```bash
+$env:POSTGRID_API_KEY = "test_sk_..."      # PowerShell; use export in bash
+python fetch_postcard_preview.py           # list recent postcards
+python fetch_postcard_preview.py postcard_1e5W851CsfBG5pGuHzGnDv
+```
+
+Saves `previews/<id>.pdf` (gitignored). Deliberately **local-only**: the rendered
+back shows the recipient's address, and this repo's Actions logs are public.
+
+With a `test_sk_` key a postcard renders fully and mails nothing, so this is the
+free way to check layout before spending anything.
+
+**Note:** PostGrid sits behind Cloudflare, which rejects Python's default
+`Python-urllib/x.y` User-Agent with a 403 (error code 1010) before the request
+reaches the API. `send_weekly_postcard.py` sends an explicit `User-Agent`; keep it
+if you rewrite the request code.
 
 ### Cost
 
