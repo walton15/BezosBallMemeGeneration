@@ -25,6 +25,7 @@ Exit codes: 0 sent (or skipped/dry-run), 1 error, 2 no images left to send.
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import sys
@@ -365,7 +366,14 @@ def main():
     if not api_key:
         sys.exit("ERROR: POSTGRID_API_KEY is not set")
 
-    result = post_postcard(payload, api_key, "weekly-postcard-" + chosen)
+    # Key on the request content, not just the filename: an identical retry
+    # (a re-run of the same Monday) still de-duplicates, but a genuinely
+    # different card - new layout, new address - is allowed through instead of
+    # silently returning the previously rendered one.
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+    result = post_postcard(
+        payload, api_key, "weekly-postcard-{}-{}".format(chosen, digest))
     postcard_id = result.get("id", "unknown")
     print("Postcard created: {} (status: {})".format(
         postcard_id, result.get("status")))
