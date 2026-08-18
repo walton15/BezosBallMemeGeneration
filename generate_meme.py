@@ -75,7 +75,8 @@ def write_status(send: bool):
         json.dump({"send": send, "date": date.today().isoformat()}, f)
 
 
-def generate_scene_prompt(client, art_style, scene, use_real_person=False):
+def generate_scene_prompt(client, art_style, scene, use_real_person=False,
+                          holiday=None):
     with open("reference.png", "rb") as f:
         ref_image = base64.b64encode(f.read()).decode("utf-8")
 
@@ -124,7 +125,15 @@ def generate_scene_prompt(client, art_style, scene, use_real_person=False):
                         "its speaker. Place the characters on opposite sides of the image so the "
                         "bubbles do not overlap.\n\n"
                         f"The art style MUST be: {art_style}\n\n"
-                        + overwhelmed_instruction +
+                        + overwhelmed_instruction
+                        + (
+                            f"HOLIDAY THEME: This meme is for {holiday}. Weave that "
+                            "holiday's iconography, costumes, props, colours and setting "
+                            "all through the scene, so the holiday is unmistakable at a "
+                            "glance. Keep the art style, the two characters, the ball and "
+                            "both speech bubbles exactly as specified above.\n\n"
+                            if holiday else ""
+                        ) +
                         "Write only the DALL-E image prompt, nothing else. Be specific and vivid."
                     ),
                 },

@@ -1,0 +1,30 @@
+{
+  "enabled": true,
+  "size": "6x4",
+  "image_dir": "weekly_mail_meme",
+  "image_source": "url",
+  "image_base_url": "",
+  "back_mode": "image",
+  "back_text": "GET OUT OF THE BALLS EVAN. Another week, another meme. -- The Bezos Ball Meme Bot",
+  "description": "Weekly Bezos ball meme postcard",
+  "to": {
+    "firstName": "Recipient",
+    "lastName": "Placeholder",
+    "addressLine1": "123 Example St",
+    "addressLine2": "",
+    "city": "Seattle",
+    "provinceOrState": "WA",
+    "postalOrZip": "98101",
+    "countryCode": "US"
+  },
+  "from": {
+    "firstName": "Sender",
+    "lastName": "Placeholder",
+    "addressLine1": "456 Sender Ave",
+    "addressLine2": "",
+    "city": "Boston",
+    "provinceOrState": "MA",
+    "postalOrZip": "02108",
+    "countryCode": "US"
+  }
+}

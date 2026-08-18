@@ -1,0 +1,67 @@
+name: Generate Weekly Memes
+
+# Fills weekly_mail_meme/ with the year's postcard images. Manual only - this
+# spends real OpenAI credit, so it should never fire on a schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max images to generate this run (blank = all remaining)'
+        required: false
+        type: string
+      start_week:
+        description: 'First week number to consider (default 1)'
+        required: false
+        type: string
+      force:
+        description: 'Regenerate weeks that already have an image'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-weekly-memes
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install openai pillow
+
+      - name: Generate images
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LIMIT: ${{ inputs.limit }}
+          START_WEEK: ${{ inputs.start_week }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          args=()
+          if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
+          if [ -n "$START_WEEK" ]; then args+=(--start-week "$START_WEEK"); fi
+          if [ "$FORCE" = "true" ]; then args+=(--force); fi
+          python generate_weekly_memes.py "${args[@]}"
+
+      # always() so a run that dies partway still commits the images it paid
+      # for; the next run skips whatever is already on disk.
+      - name: Commit generated images
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add weekly_mail_meme
+          git diff --staged --quiet && echo "No new images to commit" && exit 0
+          git commit -m "Add weekly postcard memes ($(git diff --staged --name-only | wc -l) files)"
+          git pull --rebase --autostash origin main || true
+          git push

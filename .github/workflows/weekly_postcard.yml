@@ -1,0 +1,64 @@
+name: Weekly Meme Postcard
+
+on:
+  schedule:
+    # Mondays at 13:00 UTC = 9:00am EDT (8:00am EST in winter). PostGrid queues
+    # the postcard for the next business day, so a Monday morning submission
+    # goes into production the same week.
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build the request and print it without mailing anything'
+        required: false
+        type: boolean
+        default: false
+      image:
+        description: 'Send this specific filename instead of the next in order'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+# Never let two runs mail a postcard at the same time.
+concurrency:
+  group: weekly-postcard
+  cancel-in-progress: false
+
+jobs:
+  postcard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Inputs are passed as env vars, never interpolated into the shell line.
+      - name: Send postcard
+        env:
+          POSTGRID_API_KEY: ${{ secrets.POSTGRID_API_KEY }}
+          # Real addresses stay in secrets — this repo is public, and so are
+          # its Actions logs. The script redacts them from its own output too.
+          POSTCARD_TO: ${{ secrets.POSTCARD_TO }}
+          POSTCARD_FROM: ${{ secrets.POSTCARD_FROM }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          IMAGE_OVERRIDE: ${{ inputs.image }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "$IMAGE_OVERRIDE" ]; then args+=(--image "$IMAGE_OVERRIDE"); fi
+          python send_weekly_postcard.py "${args[@]}"
+
+      - name: Commit rotation state
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add weekly_postcard_state.json
+          git diff --staged --quiet && exit 0
+          git commit -m "Weekly postcard sent $(date -u +%Y-%m-%d)"
+          git pull --rebase --autostash origin main || true
+          git push

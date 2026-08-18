@@ -28,10 +28,14 @@ Every meme has the same dialogue in a different visual style and setting:
     daily_meme.yml       — runs Mon-Fri at 5:30pm EDT: generates meme.jpg + picks the send time
     email_meme.yml       — polls every 15 min in the window, emails meme.jpg once the time passes
     manage_schedule.yml  — manually enable/disable sending by date range
+    weekly_postcard.yml  — runs Mondays 9am ET: mails the next meme as a postcard
+    generate_weekly_memes.yml — manual: fills weekly_mail_meme/ with the year's images
 generate_meme.py         — calls GPT-4o + DALL-E 3, writes meme.jpg and send_today.json
 schedule_email.py        — picks a random 6:15–9:00pm ET send time, writes next_send.json
 email_gate.py            — decides whether email_meme.yml should send on the current tick
 update_config.py         — updates config.json for enable/disable actions
+send_weekly_postcard.py  — picks the next weekly image and mails it via PostGrid
+generate_weekly_memes.py — generates a year of postcard memes, holiday-aware
 config.json              — stores disabled date ranges + evan_substitution_chance
 art_styles.txt           — 1000 art styles; one is picked at random per meme
 scenes.txt               — 1000 scene setups; one is picked at random per meme
@@ -39,6 +43,9 @@ evan_images/             — real photos of Evan; occasionally composited in (se
 send_today.json          — whether sending is enabled today (true/false)
 next_send.json           — today's randomly-chosen send time + sent flag
 meme.jpg                 — the latest generated meme (overwritten daily)
+postcard_config.json     — postcard recipient/return address, size, back layout
+weekly_postcard_state.json — which image the postcard rotation last mailed
+weekly_mail_meme/        — 52 postcard memes, one per week, mailed in name order
 ```
 
 ## Setup
@@ -51,6 +58,9 @@ Add these repository secrets (Repo → Settings → Secrets and variables → Ac
 | `OPENAI_API_KEY` | Your OpenAI API key (used to generate the meme) |
 | `MAIL_USERNAME` | The Gmail address the meme is sent **from** |
 | `MAIL_PASSWORD` | A Gmail [App Password](https://myaccount.google.com/apppasswords) for that account (not your normal password; requires 2FA enabled) |
+| `POSTGRID_API_KEY` | PostGrid Print & Mail API key, for the weekly postcard (`test_sk_...` to rehearse, `live_sk_...` to actually mail) |
+| `POSTCARD_TO` | Postcard recipient address as a JSON object (kept out of this public repo) |
+| `POSTCARD_FROM` | Postcard return address as a JSON object |
 
 The email is sent **to** `evanlazaro@gmail.com` (change the `to:` field in `email_meme.yml` to send elsewhere).
 
@@ -96,6 +106,169 @@ To re-enable early, run it again with action: `enable`.
 The workflow updates `config.json`. The next time the daily workflow runs, it will write `send: false` to `send_today.json` and the Shortcut will skip sending.
 
 **Note:** Disable before 5:30pm EDT on the day you want to skip. If the daily workflow has already run and picked a send time, disabling still works — `email_gate.py` re-checks `send_today.json` on every tick, so `send: false` stops that day's email.
+
+## Weekly physical postcard
+
+Every **Monday at 9:00am ET**, `weekly_postcard.yml` mails one image from
+`weekly_mail_meme/` as a real postcard via the [PostGrid](https://www.postgrid.com/)
+Print & Mail API.
+
+### Picking the image
+
+`weekly_mail_meme/` holds a year of images, generated ahead of time by
+`generate_weekly_memes.py` (see below). Each run mails the **next one in
+ascending filename order**:
+
+```
+weekly_mail_meme/
+  week_01.jpg               <- mailed first
+  week_02_labor_day.jpg     <- holiday weeks say so in the name
+  week_03.jpg
+  ...
+```
+
+Holiday suffixes do not disturb the order: `week_10_halloween.jpg` sorts
+between `week_09.jpg` and `week_11.jpg`.
+
+`weekly_postcard_state.json` records the filename that was last mailed, and the
+next run picks the first name sorting after it. Because the pointer is a
+**filename, not an index**, adding or deleting files never reshuffles what comes
+next — new images just need names that sort after the last one sent.
+
+When the queue runs out the workflow **fails on purpose** (exit code 2) so GitHub
+emails you the red X. Top up `weekly_mail_meme/` and the next run resumes.
+
+### Generating the year's images
+
+`generate_weekly_memes.py` fills the queue in one go. It maps 52 mailing Mondays
+starting from the next Monday, themes the weeks that line up with a holiday, and
+writes `1536x1024` JPEGs — exactly 3:2, the 6x4 postcard aspect, so nothing is
+cropped when the front is printed full-bleed.
+
+```bash
+python generate_weekly_memes.py --list       # free: print the plan, no API calls
+python generate_weekly_memes.py --limit 2    # generate the first two
+python generate_weekly_memes.py              # generate all remaining weeks
+```
+
+Run it in CI via **Actions -> Generate Weekly Memes**, where `OPENAI_API_KEY`
+already lives. Inputs: `limit`, `start_week`, and `force` (regenerate weeks that
+already have an image).
+
+The run is **resumable** — a week whose file already exists is skipped, and the
+workflow commits images even if the job fails partway, so a crash never means
+paying for the same image twice. Individual failures are collected and reported
+at the end instead of aborting the batch; re-running retries only what's missing.
+
+### Holiday weeks
+
+A postcard mailed Monday arrives several days later, so a holiday falling on a
+**Monday or Tuesday** is themed into the *previous* week's card — otherwise it
+would land after the day. Every themed card mails 2-13 days ahead of its holiday.
+
+16 of the 52 weeks are themed. Holidays are scored by priority, so when two land
+in the same week the bigger one wins. Edit `holidays_in()` in
+`generate_weekly_memes.py` to add, remove, or re-rank them.
+
+### Configuration
+
+Everything mailing-related lives in `postcard_config.json`:
+
+| Key | Meaning |
+|-----|---------|
+| `enabled` | Set `false` to pause mailing without touching the schedule |
+| `size` | `6x4`, `9x6`, or `11x6` |
+| `image_dir` | Folder holding the queue (default `weekly_mail_meme`) |
+| `image_source` | `url` (default) or `base64` — see below |
+| `image_base_url` | Optional; overrides the auto-derived image URL |
+| `back_mode` | `image`, `text`, or `blank` |
+| `back_text` | Caption printed on the back (used by `image` and `text`) |
+| `to` / `from` | Placeholder addresses only; real ones come from secrets (see below) |
+
+### Addresses live in secrets, not in the repo
+
+**This repo is public, so real street addresses are never committed to it.** The
+`to`/`from` blocks in `postcard_config.json` are permanent placeholders. Real
+addresses come from two repository secrets, each holding a JSON object:
+
+| Secret | Meaning |
+|--------|---------|
+| `POSTCARD_TO` | Recipient address |
+| `POSTCARD_FROM` | Return address (required by the carrier) |
+
+```bash
+gh secret set POSTCARD_TO --body '{"firstName":"Jane","lastName":"Doe","addressLine1":"123 EXAMPLE ST UNIT 1A","city":"SEATTLE","provinceOrState":"WA","postalOrZip":"98101","countryCode":"US"}'
+```
+
+`addressLine1`, `city`, `provinceOrState`, `postalOrZip`, and `countryCode` are
+required; the script fails fast if any is missing, and it names the source it
+used (`POSTCARD_TO` vs. the placeholder file) on every run.
+
+To change the recipient later, update the secret — no commit required.
+
+**Addresses are redacted from script output by default**, because Actions logs on
+a public repo are world-readable. Pass `--show-addresses` to reveal them in a
+local `--dry-run`. A real send still falling back to the committed placeholders
+prints a loud warning.
+
+### How the image reaches PostGrid
+
+PostGrid renders an HTML string per side rather than accepting a file upload, so
+the JPG has to be fetchable by URL. With `image_source: "url"` the script builds
+a `raw.githubusercontent.com` link pinned to the **current commit SHA**, so
+PostGrid always prints the exact committed bytes. This relies on the repo being
+public.
+
+If you ever make the repo private, set `image_source: "base64"` and the image is
+inlined as a data URI instead — no public URL needed.
+
+The front is a full-bleed image. On the back, art is confined to the left side
+with the right side and bottom strip left clear for the address block and USPS
+barcode. Printing the back costs nothing extra (the address is printed there
+regardless), so `back_mode: "image"` is the default; use `"blank"` if you'd
+rather have a clean back.
+
+### Setup
+
+1. Create a PostGrid account and grab an API key from the dashboard.
+2. Add it as repository secret `POSTGRID_API_KEY`.
+   - `test_sk_...` keys render the postcard and cost nothing but **mail nothing** — use one to verify.
+   - `live_sk_...` keys mail for real and bill your account.
+3. Set the `POSTCARD_TO` and `POSTCARD_FROM` secrets (see above). Do **not**
+   put real addresses in `postcard_config.json`.
+4. Actions -> Weekly Meme Postcard -> Run workflow, with **dry run** checked.
+
+### Manual runs
+
+Actions -> **Weekly Meme Postcard** -> Run workflow:
+
+- **dry run** — builds and prints the exact request without contacting PostGrid.
+- **image** — mails a specific filename as a one-off. This deliberately leaves
+  the rotation pointer alone, so the weekly sequence continues undisturbed.
+
+Locally:
+
+```bash
+# Placeholder addresses, output redacted
+python send_weekly_postcard.py --dry-run
+
+# Real address from env, revealed locally so you can eyeball it
+POSTCARD_TO="$(cat ~/postcard_to.json)" \n  python send_weekly_postcard.py --dry-run --show-addresses
+```
+
+Each send uses an `Idempotency-Key` derived from the filename, so a re-run of the
+same week will not mail a duplicate.
+
+### Cost
+
+PostGrid bills per postcard (roughly $1 each for one-off 6x4 sends; check their
+current pricing). At one per week that is about **$4-5/month**. The back image
+adds nothing, since the back is printed either way.
+
+Generating the year's 52 images is a **one-off** cost: gpt-image-2 at medium
+quality runs roughly $0.04-0.05 per 1536x1024 image, plus a GPT-4o prompt call
+each, so about **$3** total. Verify against your own OpenAI usage dashboard -
+image pricing is billed per-token and changes.
 
 ## Timezone note
 
