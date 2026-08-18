@@ -5,7 +5,8 @@ Automatically generates and emails a daily AI-generated meme to a friend on week
 ## How it works
 
 1. GitHub Actions runs Monday–Friday at 5:30pm EDT
-2. GPT-4o generates a random scene/style description (medieval, anime, space, etc.)
+2. GPT-4o generates a random scene/style description (medieval, anime, space, etc.),
+   themed around the holiday if the day happens to be one
 3. DALL-E 3 renders the meme with the dialogue baked in
 4. The image is committed to the repo as `meme.jpg`
 5. The same job picks a **random send time between 6:15pm and 9:00pm ET** and records it in `next_send.json`
@@ -36,6 +37,7 @@ email_gate.py            — decides whether email_meme.yml should send on the c
 update_config.py         — updates config.json for enable/disable actions
 send_weekly_postcard.py  — picks the next weekly image and mails it via PostGrid
 generate_weekly_memes.py — generates a year of postcard memes, holiday-aware
+holiday_theme.py         — shared holiday calendar used by both meme paths
 fetch_postcard_preview.py — downloads a rendered postcard PDF to check the print
 config.json              — stores disabled date ranges + evan_substitution_chance
 art_styles.txt           — 1000 art styles; one is picked at random per meme
@@ -161,15 +163,26 @@ workflow commits images even if the job fails partway, so a crash never means
 paying for the same image twice. Individual failures are collected and reported
 at the end instead of aborting the batch; re-running retries only what's missing.
 
-### Holiday weeks
+### Holidays
 
-A postcard mailed Monday arrives several days later, so a holiday falling on a
-**Monday or Tuesday** is themed into the *previous* week's card — otherwise it
-would land after the day. Every themed card mails 2-13 days ahead of its holiday.
+`holiday_theme.py` holds one holiday calendar shared by **both** meme paths, so
+adding a date themes the daily email meme and the weekly postcard at once.
 
-16 of the 52 weeks are themed. Holidays are scored by priority, so when two land
-in the same week the bigger one wins. Edit `holidays_in()` in
-`generate_weekly_memes.py` to add, remove, or re-rank them.
+The two use different timing, because they are delivered differently:
+
+| | When it themes |
+|---|---|
+| **Daily meme** | On the holiday itself. Emailed the same evening it's generated. The daily workflow only runs Mon-Fri, so a **weekend** holiday themes the **Friday before** — otherwise Halloween on a Saturday would never be themed. |
+| **Weekly postcard** | The week containing the holiday, or the **week before** when it falls on a **Monday or Tuesday**, since a card mailed Monday arrives days later. Every themed card mails 2-13 days ahead. |
+
+17 of the 52 postcard weeks are themed. Entries are scored by priority, so when
+two land together the bigger one wins — Valentine's beats Presidents' Day,
+Cinco de Mayo beats Mother's Day. **Evan's birthday (August 1)** outranks
+everything.
+
+Add, remove, or re-rank dates in `holidays_in()` in `holiday_theme.py`, and give
+each slug a human-readable name in `HOLIDAY_LABELS` — that label is what the
+prompt model is told to theme around.
 
 ### Configuration
 
@@ -324,4 +337,11 @@ Only the **generation** trigger in `daily_meme.yml` is a fixed UTC cron (`30 21 
 
 ## Cost
 
-~$0.04/image × ~20 weekdays/month = **~$0.80/month** (OpenAI DALL-E 3 standard quality)
+The daily meme costs two OpenAI calls per weekday: GPT-4o writes the prompt, then
+`gpt-image-2` renders it at 1024x1024, `quality="medium"`. That works out to very
+roughly **$0.80/month** over ~20 weekdays. Emailing itself is free (Gmail SMTP),
+as are Actions minutes on a public repo. Check your OpenAI usage dashboard for
+actual spend — image generation is billed per-token.
+
+Lower `quality` in `generate_meme.py` to cut this; the postcards are a separate
+code path and keep their resolution.
