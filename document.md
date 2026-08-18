@@ -300,9 +300,16 @@ if you rewrite the request code.
 
 ### Cost
 
-PostGrid bills per postcard (roughly $1 each for one-off 6x4 sends; check their
-current pricing). At one per week that is about **$4-5/month**. The back image
-adds nothing, since the back is printed either way.
+PostGrid charges **$0.902** per 6x4 postcard, US First Class, which *includes
+printing, processing and postage*. At one per week that is about **$3.90/month**
+or **$46.90/year**. No platform fee applies: the Starter tier covers up to 500
+mailings/month at $0 and this uses roughly four.
+
+US Standard Class is cheaper but PostGrid only offers it at 6x9 and 6x11, and it
+is built for bulk, so First Class is the rate for a weekly single. Printing the
+back costs nothing either way.
+
+Test-mode (`test_sk_`) postcards render fully and bill nothing.
 
 Generating the year's 52 images is a **one-off** cost: gpt-image-2 at medium
 quality runs roughly $0.04-0.05 per 1536x1024 image, plus a GPT-4o prompt call
