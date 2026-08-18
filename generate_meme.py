@@ -7,6 +7,8 @@ from datetime import date
 from openai import OpenAI
 from PIL import Image, ImageOps
 
+from holiday_theme import holiday_for_date, label_for
+
 
 def load_numbered_list(path):
     with open(path) as f:
@@ -170,15 +172,25 @@ def main():
     if use_real_person:
         print(f"Substituting real person: {evan_image_path}")
 
+    # If today is a holiday (or the Friday before a weekend one), theme the
+    # meme around it. Same holiday table the weekly postcards use.
+    holiday_slug, holiday_date = holiday_for_date(date.today())
+    holiday = label_for(holiday_slug) if holiday_slug else None
+    if holiday:
+        print(f"Holiday theme: {holiday_slug} ({holiday_date})")
+
     print("Generating scene prompt...")
-    prompt = generate_scene_prompt(client, art_style, scene, use_real_person=use_real_person)
+    prompt = generate_scene_prompt(client, art_style, scene,
+                                   use_real_person=use_real_person,
+                                   holiday=holiday)
 
     # If the prompt model refused, don't feed the refusal string to the image
     # model — fall back to the fully generated (non-real-person) path.
     if use_real_person and is_refusal(prompt):
         print("Scene prompt was refused; falling back to generated character.")
         use_real_person = False
-        prompt = generate_scene_prompt(client, art_style, scene, use_real_person=False)
+        prompt = generate_scene_prompt(client, art_style, scene,
+                                       use_real_person=False, holiday=holiday)
 
     print(f"Prompt: {prompt}\n")
 

@@ -32,6 +32,8 @@ import random
 import sys
 from datetime import date, timedelta
 
+from holiday_theme import HOLIDAY_LABELS, holidays_in, label_for
+
 # openai/PIL/generate_meme are imported lazily inside the functions that need
 # them, so --list works anywhere without the image-generation dependencies.
 
@@ -39,87 +41,6 @@ OUT_DIR = "weekly_mail_meme"
 WEEKS = 52
 IMAGE_SIZE = "1536x1024"  # 3:2, matching a 6x4 postcard exactly
 JPEG_QUALITY = 88
-
-# Human-readable names fed to the prompt model.
-HOLIDAY_LABELS = {
-    "new_years": "New Year's Day",
-    "mlk_day": "Martin Luther King Jr. Day",
-    "groundhog_day": "Groundhog Day",
-    "valentines": "Valentine's Day",
-    "presidents_day": "Presidents' Day",
-    "pi_day": "Pi Day (March 14th, the maths/pie holiday)",
-    "st_patricks": "St. Patrick's Day",
-    "easter": "Easter",
-    "april_fools": "April Fools' Day",
-    "cinco_de_mayo": "Cinco de Mayo",
-    "mothers_day": "Mother's Day",
-    "memorial_day": "Memorial Day",
-    "fathers_day": "Father's Day",
-    "juneteenth": "Juneteenth",
-    "independence": "the Fourth of July / Independence Day",
-    "labor_day": "Labor Day",
-    "halloween": "Halloween",
-    "thanksgiving": "Thanksgiving",
-    "christmas": "Christmas",
-    "new_years_eve": "New Year's Eve",
-}
-
-
-def easter(year):
-    """Anonymous Gregorian computus."""
-    a = year % 19
-    b, c = year // 100, year % 100
-    d, e = b // 4, b % 4
-    f = (b + 8) // 25
-    g = (b - f + 1) // 3
-    h = (19 * a + b - d - g + 15) % 30
-    i, k = c // 4, c % 4
-    el = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * el) // 451
-    month = (h + el - 7 * m + 114) // 31
-    day = ((h + el - 7 * m + 114) % 31) + 1
-    return date(year, month, day)
-
-
-def nth_weekday(year, month, weekday, n):
-    first = date(year, month, 1)
-    first += timedelta(days=(weekday - first.weekday()) % 7)
-    return first + timedelta(weeks=n - 1)
-
-
-def last_weekday(year, month, weekday):
-    if month == 12:
-        last = date(year, 12, 31)
-    else:
-        last = date(year, month + 1, 1) - timedelta(days=1)
-    return last - timedelta(days=(last.weekday() - weekday) % 7)
-
-
-def holidays_in(year):
-    """(slug, date, priority) for one year; higher priority wins a collision."""
-    return [
-        ("new_years", date(year, 1, 1), 5),
-        ("mlk_day", nth_weekday(year, 1, 0, 3), 2),
-        ("groundhog_day", date(year, 2, 2), 1),
-        ("valentines", date(year, 2, 14), 5),
-        ("presidents_day", nth_weekday(year, 2, 0, 3), 2),
-        ("pi_day", date(year, 3, 14), 1),
-        ("st_patricks", date(year, 3, 17), 4),
-        ("easter", easter(year), 4),
-        ("april_fools", date(year, 4, 1), 3),
-        ("cinco_de_mayo", date(year, 5, 5), 3),
-        ("mothers_day", nth_weekday(year, 5, 6, 2), 3),
-        ("memorial_day", last_weekday(year, 5, 0), 3),
-        ("fathers_day", nth_weekday(year, 6, 6, 3), 3),
-        ("juneteenth", date(year, 6, 19), 2),
-        ("independence", date(year, 7, 4), 5),
-        ("labor_day", nth_weekday(year, 9, 0, 1), 3),
-        ("halloween", date(year, 10, 31), 5),
-        ("thanksgiving", nth_weekday(year, 11, 3, 4), 5),
-        ("christmas", date(year, 12, 25), 5),
-        ("new_years_eve", date(year, 12, 31), 2),
-    ]
-
 
 def build_schedule(start_monday):
     """[(week_no, mail_date, holiday_slug_or_None, holiday_date_or_None)]."""
@@ -167,7 +88,7 @@ def generate_one(client, art_styles, scenes, slug):
 
     art_style = random.choice(art_styles)
     scene = random.choice(scenes)
-    holiday = HOLIDAY_LABELS.get(slug) if slug else None
+    holiday = label_for(slug) if slug else None
 
     prompt = generate_scene_prompt(client, art_style, scene, holiday=holiday)
     if is_refusal(prompt):
