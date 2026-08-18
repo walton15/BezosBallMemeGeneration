@@ -34,6 +34,8 @@ import urllib.request
 from datetime import date
 
 API_URL = "https://api.postgrid.com/print-mail/v1/postcards"
+USER_AGENT = ("BezosBallMemeGeneration/1.0 "
+              "(+https://github.com/walton15/BezosBallMemeGeneration)")
 CONFIG_PATH = "postcard_config.json"
 STATE_PATH = "weekly_postcard_state.json"
 IMAGE_EXTS = (".jpg", ".jpeg", ".png")
@@ -224,6 +226,10 @@ def post_postcard(payload, api_key, idempotency_key):
             "x-api-key": api_key,
             "Content-Type": "application/json",
             "Idempotency-Key": idempotency_key,
+            # PostGrid sits behind Cloudflare, which rejects the default
+            # "Python-urllib/x.y" agent with a 403 (error code 1010). Any
+            # identifiable agent gets through.
+            "User-Agent": USER_AGENT,
         },
         method="POST",
     )
