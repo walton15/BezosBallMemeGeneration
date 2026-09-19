@@ -4,6 +4,26 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 
+def parse_day(text):
+    """Parse a date from ISO or from what an iOS Shortcut sends by default.
+
+    Shortcuts' unformatted dates look like "9/19/26, 1:17 AM" (US short style)
+    or "Sep 19, 2026 at 1:17 AM" (medium style), with a narrow no-break space
+    before AM/PM. The time part is ignored.
+    """
+    text = text.replace(" ", " ").replace("\xa0", " ").strip()
+    text = text.split(" at ")[0].strip()
+    candidates = [text, text.split(",")[0].strip()]
+    formats = ("%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y", "%b %d, %Y", "%B %d, %Y")
+    for candidate in candidates:
+        for fmt in formats:
+            try:
+                return datetime.strptime(candidate, fmt).date()
+            except ValueError:
+                pass
+    return None
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: update_config.py <enable|disable> [start_date] [end_date]")
@@ -38,10 +58,9 @@ def main():
         if len(sys.argv) < 3:
             print(f"Usage: update_config.py {action} <date> ...")
             sys.exit(1)
-        try:
-            day = date.fromisoformat(sys.argv[2].strip())
-        except ValueError:
-            print(f"Bad date {sys.argv[2]!r}; expected YYYY-MM-DD.")
+        day = parse_day(sys.argv[2])
+        if day is None:
+            print(f"Bad date {sys.argv[2]!r}; expected e.g. 2026-09-21 or 9/21/26.")
             sys.exit(1)
         special_days = config.setdefault("special_days", {})
         if action == "clear":
