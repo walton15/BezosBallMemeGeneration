@@ -77,8 +77,14 @@ def write_status(send: bool):
         json.dump({"send": send, "date": date.today().isoformat()}, f)
 
 
+def special_day_for_today(config):
+    """One-off override for today from config.json's special_days, or {}."""
+    return config.get("special_days", {}).get(date.today().isoformat(), {})
+
+
 def generate_scene_prompt(client, art_style, scene, use_real_person=False,
-                          holiday=None):
+                          holiday=None, aggressor_line="GET OUT OF THE BALLS EVAN",
+                          theme=None):
     with open("reference.png", "rb") as f:
         ref_image = base64.b64encode(f.read()).decode("utf-8")
 
@@ -119,7 +125,7 @@ def generate_scene_prompt(client, art_style, scene, use_real_person=False,
                         "The meme always has the same setup: two characters, one physically "
                         "dominating/overpowering the other. The overpowered character needs to look very scared, overwhelmed, or tired. They should be inside of a ball or near a ball of any kind.\n"
                         "- The dominant character has a speech bubble pointing directly at them "
-                        "that says EXACTLY: \"GET OUT OF THE BALLS EVAN\"\n"
+                        f"that says EXACTLY: \"{aggressor_line}\"\n"
                         "- The overwhelmed character has a speech bubble pointing directly at them "
                         "that says EXACTLY: \"MY PRODUCTIVITY\"\n"
                         "Both speech bubbles must be white with black text, clearly legible, large "
@@ -135,6 +141,13 @@ def generate_scene_prompt(client, art_style, scene, use_real_person=False,
                             "glance. Keep the art style, the two characters, the ball and "
                             "both speech bubbles exactly as specified above.\n\n"
                             if holiday else ""
+                        ) + (
+                            f"THEME: This meme is {theme} themed. Weave that theme's "
+                            "iconography, costumes, props, colours and setting all "
+                            "through the scene, so it is unmistakable at a glance. Keep "
+                            "the art style, the two characters, the ball and both speech "
+                            "bubbles exactly as specified above.\n\n"
+                            if theme else ""
                         ) +
                         "Write only the DALL-E image prompt, nothing else. Be specific and vivid."
                     ),
@@ -179,10 +192,18 @@ def main():
     if holiday:
         print(f"Holiday theme: {holiday_slug} ({holiday_date})")
 
+    # One-off per-date overrides (custom caption and/or theme) from config.json.
+    special = special_day_for_today(config)
+    aggressor_line = special.get("aggressor_line", "GET OUT OF THE BALLS EVAN")
+    theme = special.get("theme")
+    if special:
+        print(f"Special day override: {special}")
+
     print("Generating scene prompt...")
     prompt = generate_scene_prompt(client, art_style, scene,
                                    use_real_person=use_real_person,
-                                   holiday=holiday)
+                                   holiday=holiday,
+                                   aggressor_line=aggressor_line, theme=theme)
 
     # If the prompt model refused, don't feed the refusal string to the image
     # model — fall back to the fully generated (non-real-person) path.
@@ -190,7 +211,8 @@ def main():
         print("Scene prompt was refused; falling back to generated character.")
         use_real_person = False
         prompt = generate_scene_prompt(client, art_style, scene,
-                                       use_real_person=False, holiday=holiday)
+                                       use_real_person=False, holiday=holiday,
+                                       aggressor_line=aggressor_line, theme=theme)
 
     print(f"Prompt: {prompt}\n")
 

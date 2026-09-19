@@ -97,6 +97,23 @@ When it triggers, a random photo is picked and composited into the scene via the
 OpenAI image **edit** endpoint (preserving the real face). If the roll fails, or
 `evan_images/` is empty/missing, a normal fully-generated meme is produced.
 
+## One-off special days
+
+To change the aggressor's line and/or theme for a single daily meme, add the
+date to `special_days` in `config.json`:
+
+```json
+"special_days": {
+  "2026-09-21": {
+    "aggressor_line": "GET OUT OF TEXAS EVAN",
+    "theme": "Texas (cowboys, longhorns, cacti, the Lone Star flag, ...)"
+  }
+}
+```
+
+Both keys are optional. Only the daily meme reads this; the weekly postcards
+don't.
+
 ## Disabling for a date range
 
 Go to **Actions → Manage Schedule → Run workflow**, then:

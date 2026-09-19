@@ -1,4 +1,14 @@
 {
   "disabled_ranges": [],
-  "evan_substitution_chance": 0.15
+  "evan_substitution_chance": 0.15,
+  "special_days": {
+    "2026-09-19": {
+      "aggressor_line": "GET OUT OF TEXAS EVAN",
+      "theme": "Texas (cowboys, longhorns, cacti, the Lone Star flag, oil derricks, BBQ, desert ranch landscapes)"
+    },
+    "2026-09-21": {
+      "aggressor_line": "GET OUT OF TEXAS EVAN",
+      "theme": "Texas (cowboys, longhorns, cacti, the Lone Star flag, oil derricks, BBQ, desert ranch landscapes)"
+    }
+  }
 }
