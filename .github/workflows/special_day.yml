@@ -1,0 +1,61 @@
+name: Special Day
+
+# Set (or clear) a one-off caption/theme for a single day's daily meme.
+# Triggered from the Actions tab or the iOS Shortcut via the dispatch API.
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Date YYYY-MM-DD'
+        required: true
+      aggressor_line:
+        description: 'What the dominant character says (e.g. GET OUT OF TEXAS EVAN)'
+        required: false
+      theme:
+        description: 'Theme for the scene (e.g. Texas)'
+        required: false
+      clear:
+        description: 'Remove the override for this date instead'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  update-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Free-text inputs go through env vars, not ${{ }} in the script, so
+      # quotes or $ in a caption can't break (or inject into) the shell.
+      - name: Update config
+        env:
+          DAY: ${{ inputs.date }}
+          LINE: ${{ inputs.aggressor_line }}
+          THEME: ${{ inputs.theme }}
+          CLEAR: ${{ inputs.clear }}
+        run: |
+          if [ "$CLEAR" = "true" ]; then
+            python update_config.py clear "$DAY"
+          else
+            python update_config.py special "$DAY" "$LINE" "$THEME"
+          fi
+
+      - name: Commit and push
+        env:
+          DAY: ${{ inputs.date }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add config.json
+          git diff --staged --quiet || git commit -m "Special day update: $DAY"
+          git pull --rebase
+          git push
