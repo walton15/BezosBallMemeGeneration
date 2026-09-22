@@ -2,12 +2,21 @@ import base64
 import json
 import os
 import random
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from openai import OpenAI
 from PIL import Image, ImageOps
 
 from holiday_theme import holiday_for_date, label_for
+
+ET = ZoneInfo("America/New_York")
+
+
+def today_et():
+    # GitHub runners are on UTC; a delayed evening run can cross midnight UTC,
+    # so always use the Eastern date (matches schedule_email.py / email_gate.py).
+    return datetime.now(ET).date()
 
 
 def load_numbered_list(path):
@@ -65,7 +74,7 @@ def is_refusal(text):
 
 
 def is_disabled_today(config):
-    today = date.today().isoformat()
+    today = today_et().isoformat()
     for r in config.get("disabled_ranges", []):
         if r["start"] <= today <= r["end"]:
             return True
@@ -74,12 +83,12 @@ def is_disabled_today(config):
 
 def write_status(send: bool):
     with open("send_today.json", "w") as f:
-        json.dump({"send": send, "date": date.today().isoformat()}, f)
+        json.dump({"send": send, "date": today_et().isoformat()}, f)
 
 
 def special_day_for_today(config):
     """One-off override for today from config.json's special_days, or {}."""
-    return config.get("special_days", {}).get(date.today().isoformat(), {})
+    return config.get("special_days", {}).get(today_et().isoformat(), {})
 
 
 def generate_scene_prompt(client, art_style, scene, use_real_person=False,
@@ -163,7 +172,7 @@ def main():
         config = json.load(f)
 
     if is_disabled_today(config):
-        print(f"Sending disabled today ({date.today().isoformat()}), skipping.")
+        print(f"Sending disabled today ({today_et().isoformat()}), skipping.")
         write_status(False)
         return
 
@@ -187,7 +196,7 @@ def main():
 
     # If today is a holiday (or the Friday before a weekend one), theme the
     # meme around it. Same holiday table the weekly postcards use.
-    holiday_slug, holiday_date = holiday_for_date(date.today())
+    holiday_slug, holiday_date = holiday_for_date(today_et())
     holiday = label_for(holiday_slug) if holiday_slug else None
     if holiday:
         print(f"Holiday theme: {holiday_slug} ({holiday_date})")
